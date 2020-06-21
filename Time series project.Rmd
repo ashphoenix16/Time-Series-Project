@@ -1,0 +1,298 @@
+---
+title: "Time Series Analysis Project "
+author: "Ashwin Fernandes - S3803581"
+output:
+  html_document: 
+    fig_caption: yes
+  pdf_document: default
+  
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(
+	echo = TRUE,
+	fig.align = "center",
+	message = FALSE,
+	warning = FALSE
+)
+library(TSA)
+library(tseries)
+library(fUnitRoots)
+library(lmtest)
+library(FitAR)
+library(forecast)
+source('sort.score.R')
+source('residual.analysis.R')
+
+```
+
+## Descriptive statistics
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+tea <- read.csv("longtermpriceindex.csv",header = TRUE)    # Reading the dataset using read.csv function.
+head(tea)
+class(tea)     
+```
+
+
+```{r echo=TRUE, message=FALSE, warning=FALSE}
+tea_ts <- ts(tea$Tea, start = 1850)  # Converting the data frame to time series object
+class(tea_ts)   # rechecking if the  conversion was succesful
+```
+
+```{r echo=FALSE, fig.cap="Figure 1: Time series plot of the price index of tea from 1850 to 2015 ", message=FALSE, warning=FALSE}
+par(mfrow=c(1,1))
+plot(tea_ts,xlab='Time (years)',type="o",ylab = "Price index", main = "Long term price index of tea commodity")
+
+```
+
+```{r fig.cap="Figure 2: Scatter plot of the consecutive yearly values",echo=FALSE, message=FALSE, warning=FALSE}
+#ScatterPlot
+plot(y=tea_ts,x=zlag(tea_ts), xlab = "Previous Year Price Index",ylab="Price Index",main = "Scatter plot of neighbouring price index")
+```
+
+Correlation(r) value:
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+y=tea_ts         #Read the abundance data into y
+x=zlag(tea_ts)   #Generate first lag of the abundance series
+index=2:length(x)          # Create an index to get rid of the first NA values 
+cor(y[index],x[index]) #Calculate correlation between x and y.
+```
+
+```{r fig.cap="Figure 4: ACF & PACF plot of the series ",echo=FALSE, message=FALSE, warning=FALSE}
+par(mfrow=c(1,2))
+acf(tea_ts)
+pacf(tea_ts)
+```
+
+```{r fig.cap="Figure 3: Normal QQ plot ",echo=FALSE, message=FALSE, warning=FALSE}
+qqnorm(tea_ts)
+qqline(tea_ts, col = 2)
+shapiro.test(tea_ts)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+adf.test(tea_ts)
+```
+## Deterministic modeling
+
+# Linear model
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+linear_model=lm(formula = tea_ts ~ time(tea_ts))
+summary(linear_model)
+```
+
+#Linear Model with Trend Line
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot(tea_ts, main="Long term price index of tea commodity(Linear Trend fit)", xlab='Time',
+ylab='Price Index', type='o')
+abline(temp, col="red")
+legend ("topright", lty = 1, col = c("red"), text.width = 38,
+c("Linear Trend line"))
+```
+
+# Residual analysis of Linear Trend
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+res.model = rstudent(linear_model)
+par(mfrow=c(2,2))
+plot(y = res.model, x = as.vector(time(tea_ts)),xlab = 'Time', ylab='Standardized Residuals',type='o',
+main = "Residuals plot for Linear Model")
+abline(h=0)
+acf(res.model,main="ACF of Standardized Residuals")
+hist(res.model,xlab='Standardized Residuals',main='Histogram of Linear Trend Residuals')
+qqnorm(res.model)
+qqline(res.model, col = 2, lwd = 1, lty = 2)
+shapiro.test(res.model)
+```
+
+# Quadratic model with curve
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+t = time(tea_ts)
+t2 = t^2
+quadratic_model = lm(tea_ts~ t + t2)
+summary(quadratic_model)
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+plot(ts(fitted(quadratic_model)), ylim=c(min(c(fitted(quadratic_model),
+as.vector(tea_ts))),max(c(fitted(quadratic_model),as.vector(tea_ts)))),
+main="Long term price index of tea commodity(Quadratic Trend fit)", xlab='Time', ylab='Price
+Index',col='blue')
+lines(as.vector(tea_ts),type="o")
+legend ("topright", lty = 1, col = c("blue"), text.width = 38,
+c("Quadratic trend"))
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# Residual analysis of Quadratic trend
+res.model2 = rstudent(quadratic_model)
+par(mfrow=c(2,2))
+plot(y = res.model2, x = as.vector(time(tea_ts)),xlab = 'Time', ylab='Standardized Residuals',type='o',
+main = "Residuals plot for Quadratic Model")
+abline(h=0)
+acf(res.model2,main="ACF of Standardized Residuals")
+hist(res.model2,xlab='Standardized Residuals',main='Histogram of Quadratic Trend Residuals')
+qqnorm(res.model2)
+qqline(res.model2, col = 2, lwd = 1, lty = 2)
+shapiro.test(res.model2)
+```
+
+## ARMA Model building strategy
+
+### Boxcox transformation of the series
+
+
+```{r fig.cap="Figure 5: Confidence interval for lambda", echo=FALSE, message=FALSE, warning=FALSE}
+tea_ts.transform = BoxCox.ar(tea_ts,method="yule-walker")
+tea_ts.transform$ci
+tea_ts.log = log(tea_ts) # 0 is in the interval or you can go for mid point of the interval as well
+```
+
+```{r fig.cap="Figure 5: Confidence interval for lambda", echo=FALSE, message=FALSE, warning=FALSE}
+qqnorm(tea_ts.log, ylab="log(earnings)", xlab="Normal Scores")
+qqline(tea_ts.log)
+shapiro.test(tea_ts.log) 
+```
+
+```{r fig.cap="Figure 6: Time series plot of the BoxCox transformed series",echo=FALSE, message=FALSE, warning=FALSE}
+plot(tea_ts.log,xlab='Time (years)',type="o",ylab = "Price index", main = "Long term price index of tea commodity(Log transformed)")
+```
+
+Applying the ADF test to verify whether the transformed series is stationary or non-stationary:
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+adf.test(tea_ts.log)
+
+```
+
+
+### Differencing the series
+
+```{r fig.cap="Figure 7: Time series plot of the first differenced series",echo=FALSE, message=FALSE, warning=FALSE}
+diff.tea_ts= diff(tea_ts.log,differences=1)
+plot(diff.tea_ts,xlab='Time (years)',type="o",ylab = "Price index", main = "Long term price index of tea commodity")
+
+```
+
+ADF test results:
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+adf.test(diff.tea_ts)
+```
+
+## Model Specification
+ARMA model specification was done using the ACF, PACF,EACF and the BIC plot.
+
+- **Sample ACF & PACF:**<br/>
+```{r fig.cap="Figure 8: ACF & PACF plot of the first differenced series",echo=FALSE, message=FALSE, warning=FALSE}
+par(mfrow=c(1,2))
+acf(diff.tea_ts)
+pacf(diff.tea_ts)
+```
+
+- **Extended Autocorrelation function(EACF):**<br/>
+The EACF identifies the order of auto-regressive and moving average components of an ARMA(p,q) model.Since this is a small dataset,the AR & MA component for the EACF function is set to a minimum value in order to obtain simple and parsimonious models.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+eacf(diff.tea_ts,ar.max = 5, ma.max = 5) 
+```
+
+- **Bayesian Information Criterion(BIC):**<br/>
+The BIC plot based on the maximum likelihood estimation (MLE) shows the orders of the ARIMA models ranking from the lowest to highest.  
+```{r fig.cap="Figure 9: BIC plot of the first differenced series",echo=FALSE, message=FALSE, warning=FALSE}
+bic = armasubsets(y=diff.tea_ts,nar=3,nma=3,y.name='test',ar.method='ols')
+plot(bic)
+```
+
+
+## Parameter Estimation
+
+Parameter estimation for ARIMA(0,1,2) based on maximum likelihood(ML) & conditional least squares(CSS) estimators:
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# ARIMA(0,1,2)
+model_012_css = arima(tea_ts.log,order=c(0,1,2),method='CSS')
+coeftest(model_012_css)
+
+model_012_ml = arima(tea_ts.log,order=c(0,1,2),method='ML')
+coeftest(model_012_ml)
+
+```
+
+Parameter estimation for ARIMA(1,1,2) based on maximum likelihood(ML) & conditional least squares(CSS) estimators:
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# ARIMA(1,1,2)
+model_112_css = arima(tea_ts.log,order=c(1,1,2),method='CSS')
+coeftest(model_112_css)
+
+model_112_ml = arima(tea_ts.log,order=c(1,1,2),method='ML')
+coeftest(model_112_ml)
+
+```
+
+Parameter estimation for ARIMA(2,1,2) based on maximum likelihood(ML) & conditional least squares(CSS) estimators:
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# ARIMA(2,1,2)
+model_212_css = arima(tea_ts.log,order=c(2,1,2),method='CSS')
+coeftest(model_212_css)
+
+model_212_ml = arima(tea_ts.log,order=c(2,1,2),method='ML')
+coeftest(model_212_ml)
+
+```
+
+Parameter estimation for ARIMA(0,1,3) based on maximum likelihood(ML) & conditional least squares(CSS) estimators:
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+# ARIMA(0,1,3)
+model_013_css = arima(tea_ts.log,order=c(0,1,3),method='CSS')
+coeftest(model_013_css)
+
+model_013_ml = arima(tea_ts.log,order=c(0,1,3),method='ML')
+coeftest(model_013_ml)
+
+```
+
+
+### Sorting models by AIC and BIC scores
+Sorting the AIC and BIC scores of all the possible models to identify the best model.The sort.score function was used to sort the models ordered from lowest to highest AIC and BIC scores.Below table shows the AIC & BIC scores of the candidate ARMA models sorted from lowest to highest.
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+sort.score(AIC(model_012_ml,model_013_ml,model_112_ml,model_212_ml), score = "aic")
+sort.score(BIC(model_012_ml,model_013_ml,model_112_ml,model_212_ml), score = "bic" )
+
+```
+
+As per the AIC & BIC table, ARIMA(0,1,2) seems to be the best fit for the series.
+
+
+## Model Overfitting
+The ARIMA(1,1,2) & ARIMA(0,1,3) model was found to be an overfitting model for ARIMA(0,1,2).We already performed parameter estimation for the models and the AR(1) & MA(3) coefficient were found to be insignificant respectively inferring that ARIMA(1,1,2) & ARIMA(0,1,3) is an overfitted model.Hence ARIMA(0,1,1) model was chosen for the model diagnostics.  
+
+## Model Diagnostics
+Residual analysis of the selected ARIMA(0,1,2) model was conducted to determine the goodness of fit for the series. This residual analysis involves analysing the standardised residuals time series plot,histogram, QQ Plot ,ACF & PACF, Shapiro-Wilk test of the standardised residuals and the Ljung-Box test. Figure 10 displays the plot for the residuals of the ARIMA(0,1,2) model.
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+residual.analysis(model = model_012_ml)
+```
+
+## Forecasting
+
+```{r fig.cap="Figure 11: Forecast plot for ARIMA(0,1,1) model",echo=FALSE, message=FALSE, warning=FALSE}
+fit = Arima(tea_ts,c(0,1,2),lambda = 0) #Specifying the lambda value of the box cox transformation
+plot(forecast(fit,h=10),xlab='Time (years)',ylab = "Price index", main = "Forecast of tea price index ") 
+
+```
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+arima012.mle <- Arima(tea_ts, c(0, 1, 2), method = "ML", include.mean = FALSE,lambda = 0) # mle estimate
+arima012.mle.pred <- exp(predict(arima012.mle, n.ahead = 10)$pred) # mle estimate prediction
+arima012.mle.pred
+```
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+arima012.css <- Arima(tea_ts, c(0, 1, 2), method = "CSS", include.mean = FALSE,lambda = 0) # css estimate
+arima012.css.pred <- exp(predict(arima012.css, n.ahead = 10)$pred) # css estimate prediction
+arima012.css.pred
+```
+
